@@ -49,13 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -152,6 +149,7 @@ fun MessageScreen(
     val filteringDisabled = contactSettings[contactKey]?.filteringDisabled ?: false
 
     var isTextFieldFocused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
 
     androidx.activity.compose.BackHandler(enabled = isTextFieldFocused) {
         focusManager.clearFocus()
@@ -296,7 +294,31 @@ fun MessageScreen(
         }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().onKeyEvent { keyEvent ->
+            if (keyEvent.type == KeyEventType.KeyUp && !isTextFieldFocused) {
+                when (keyEvent.key) {
+                    Key.NumPad1, Key.One -> {
+                        focusRequester.requestFocus()
+                        true
+                    }
+                    Key.NumPad2, Key.Two -> {
+                        val messageText = messageInputState.text.toString().trim { it.isWhitespace() }
+                        if (messageText.isNotEmpty() && connectionState is ConnectionState.Connected) {
+                            onEvent(MessageScreenEvent.SendMessage(messageText, replyingToPacketId))
+                        }
+                        true
+                    }
+                    Key.NumPad3, Key.Three -> {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        true
+                    }
+                    else -> false
+                }
+            } else {
+                false
+            }
+        },
         topBar = {
             if (inSelectionMode) {
                 ActionModeTopBar(
@@ -375,6 +397,7 @@ fun MessageScreen(
                     isEnabled = connectionState is ConnectionState.Connected,
                     isHomoglyphEncodingEnabled = homoglyphEncodingEnabled,
                     textFieldState = messageInputState,
+                    modifier = Modifier.focusRequester(focusRequester),
                     onFocusChanged = { isTextFieldFocused = it },
                     onSendMessage = {
                         val messageText = messageInputState.text.toString().trim { it.isWhitespace() }
@@ -504,7 +527,13 @@ private fun MessageInput(
         },
         state = textFieldState,
         lineLimits = TextFieldLineLimits.MultiLine(1, MAX_LINES),
-        label = { Text(stringResource(Res.string.message_input_label)) },
+        label = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("[1]", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(4.dp))
+                Text(stringResource(Res.string.message_input_label))
+            }
+        },
         enabled = isEnabled,
         shape = RoundedCornerShape(ROUNDED_CORNER_PERCENT.toFloat()),
         isError = isOverLimit,
@@ -535,10 +564,16 @@ private fun MessageInput(
         trailingIcon = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onCloseKeyboard) {
-                    Icon(imageVector = MeshtasticIcons.Close, contentDescription = "Close Keyboard")
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(imageVector = MeshtasticIcons.Close, contentDescription = "Close Keyboard")
+                        Text("[3]", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
                 IconButton(onClick = { if (canSend) onSendMessage() }, enabled = canSend) {
-                    Icon(imageVector = MeshtasticIcons.Send, contentDescription = stringResource(Res.string.send))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(imageVector = MeshtasticIcons.Send, contentDescription = stringResource(Res.string.send))
+                        Text("[2]", style = MaterialTheme.typography.labelSmall)
+                    }
                 }
             }
         },
