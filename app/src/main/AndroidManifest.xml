@@ -103,6 +103,14 @@
         android:name="android.hardware.usb.host"
         android:required="false" />
 
+    <!-- Google TV / Android TV Support -->
+    <uses-feature
+        android:name="android.software.leanback"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
     <!-- Declare geo: intent visibility for Android 11+ (needed for resolveActivity with map apps) -->
     <queries>
         <intent>
@@ -117,6 +125,7 @@
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
+        android:banner="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:hardwareAccelerated="true"
@@ -192,6 +201,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
             <intent-filter>
