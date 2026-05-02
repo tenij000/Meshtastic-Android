@@ -20,13 +20,7 @@ package org.meshtastic.feature.messaging
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -51,7 +45,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
@@ -60,6 +58,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
@@ -82,6 +81,7 @@ import org.meshtastic.core.resources.type_a_message
 import org.meshtastic.core.resources.unknown_channel
 import org.meshtastic.core.ui.component.SharedContactDialog
 import org.meshtastic.core.ui.component.smartScrollToIndex
+import org.meshtastic.core.ui.icon.Close
 import org.meshtastic.core.ui.icon.MeshtasticIcons
 import org.meshtastic.core.ui.icon.Send
 import org.meshtastic.core.ui.theme.AppTheme
@@ -129,6 +129,7 @@ fun MessageScreen(
     val coroutineScope = rememberCoroutineScope()
     val clipboardManager = LocalClipboard.current
     val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     val nodes by viewModel.nodeList.collectAsStateWithLifecycle()
     val ourNode by viewModel.ourNodeInfo.collectAsStateWithLifecycle()
@@ -149,6 +150,13 @@ fun MessageScreen(
     val filteredCount by viewModel.filteredCount.collectAsStateWithLifecycle()
     val showFiltered by viewModel.showFiltered.collectAsStateWithLifecycle()
     val filteringDisabled = contactSettings[contactKey]?.filteringDisabled ?: false
+
+    var isTextFieldFocused by remember { mutableStateOf(false) }
+
+    androidx.activity.compose.BackHandler(enabled = isTextFieldFocused) {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+    }
 
     // Prevent the message TextField from stealing focus when the screen opens
     LaunchedEffect(contactKey) { focusManager.clearFocus() }
@@ -367,12 +375,17 @@ fun MessageScreen(
                     isEnabled = connectionState is ConnectionState.Connected,
                     isHomoglyphEncodingEnabled = homoglyphEncodingEnabled,
                     textFieldState = messageInputState,
+                    onFocusChanged = { isTextFieldFocused = it },
                     onSendMessage = {
                         val messageText = messageInputState.text.toString().trim { it.isWhitespace() }
                         if (messageText.isNotEmpty()) {
                             onEvent(MessageScreenEvent.SendMessage(messageText, replyingToPacketId))
                         }
                     },
+                    onCloseKeyboard = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                    }
                 )
             }
         },
@@ -452,6 +465,8 @@ private fun MessageInput(
     textFieldState: TextFieldState,
     modifier: Modifier = Modifier,
     maxByteSize: Int = MESSAGE_CHARACTER_LIMIT_BYTES,
+    onFocusChanged: (Boolean) -> Unit = {},
+    onCloseKeyboard: () -> Unit = {},
     onSendMessage: () -> Unit,
 ) {
     val currentTextRaw = textFieldState.text.toString()
@@ -474,7 +489,9 @@ private fun MessageInput(
 
     OutlinedTextField(
         modifier =
-        modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp).onKeyEvent { keyEvent ->
+        modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+            .onFocusChanged { onFocusChanged(it.isFocused) }
+            .onKeyEvent { keyEvent ->
             val isEnterNoShift = keyEvent.key == Key.Enter && !keyEvent.isShiftPressed
             if (isEnterNoShift) {
                 if (keyEvent.type == KeyEventType.KeyUp && canSend) {
@@ -516,8 +533,13 @@ private fun MessageInput(
         // If strict real-time byte trimming is required, it needs careful handling of
         // cursor position and multi-byte characters, likely outside simple inputTransformation.
         trailingIcon = {
-            IconButton(onClick = { if (canSend) onSendMessage() }, enabled = canSend) {
-                Icon(imageVector = MeshtasticIcons.Send, contentDescription = stringResource(Res.string.send))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = onCloseKeyboard) {
+                    Icon(imageVector = MeshtasticIcons.Close, contentDescription = "Close Keyboard")
+                }
+                IconButton(onClick = { if (canSend) onSendMessage() }, enabled = canSend) {
+                    Icon(imageVector = MeshtasticIcons.Send, contentDescription = stringResource(Res.string.send))
+                }
             }
         },
     )
